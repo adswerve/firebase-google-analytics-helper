@@ -643,7 +643,7 @@ object AnalyticsHelper {
     @get:SuppressLint("SimpleDateFormat")
     private val timestamp: String
         get() {
-            val format = "yyyy-MM-dd HH:mm:ss.SSS 'GMT'Z '('z')'" // 2020-02-11 11:26:02.868 GMT-0800 (PST)
+            val format = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"; // 2022-10-20T18:51:30.974-07:00 (ISO 8601 format)
             val formatter = SimpleDateFormat(format)
             formatter.timeZone = TimeZone.getDefault()
             return formatter.format(Date(System.currentTimeMillis()))

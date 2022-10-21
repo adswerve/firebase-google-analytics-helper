@@ -555,7 +555,7 @@ class AnalyticsHelper {
     /// String representation of current timestamp.
     private static var timestamp: String {
         let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS 'GMT'Z '('z')'"  // 2020-02-11 11:26:02.868 GMT-0800 (PST)
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"; // 2022-10-20T18:51:30.974-07:00 (ISO 8601 format)
         return dateFormatter.string(from: Date())
     }
     

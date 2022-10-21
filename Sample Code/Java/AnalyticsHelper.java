@@ -687,7 +687,7 @@ public class AnalyticsHelper {
      */
     @SuppressLint("SimpleDateFormat")
     private static String getTimestamp() {
-        String format = "yyyy-MM-dd HH:mm:ss.SSS 'GMT'Z '('z')'"; // 2020-02-11 11:26:02.868 GMT-0800 (PST)
+        String format = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"; // 2022-10-20T18:51:30.974-07:00 (ISO 8601 format)
         SimpleDateFormat formatter = new SimpleDateFormat(format);
         formatter.setTimeZone(TimeZone.getDefault());
         return formatter.format(new Date(System.currentTimeMillis()));
