@@ -1,19 +1,18 @@
 /**
  * AnalyticsHelper.h
  *
- * Helper class to assist with common analytics implementation needs, including:
+ * Helper class to assist with common GA4 analytics implementation needs, including:
  *
  * - Defining event, parameter, and user property constants to prevent typos
  * - Adding standard parameters to every event, etc.
- * - Validating names/values before sending to Firebase
- * - Truncating string values to maximum supported lengths before sending to Firebase
+ * - Validating names/values before sending to GA4/Firebase
+ * - Truncating string values to maximum supported lengths before sending to GA4/Firebase
  * - Enabling DebugView in builds not launched directly from Xcode
- * - Sending buffered hits when app goes into the background (Universal Analytics)
  *
  * This class does not need to  be instantiated. All methods are static class methods. For convenience,
- * all commonly-used Firebase methods have identically-named methods here.
+ * all commonly-used GA4/Firebase methods have identically-named methods here.
  *
- * Firebase validation/enforcement behavior can be controlled via the following methods:
+ * GA4/Firebase validation/enforcement behavior can be controlled via the following methods:
  *
  * - setValidateInDebug (default: true)
  * - setValidateInProduction (default: false)
@@ -24,13 +23,8 @@
  * This code is intended only to illustrate how you might create an analytics helper class.
  * It is not ready for production use as-is.
  *
- * The parts of this sample code that deal with Universal Analytics depend on the presence of
- * Google Tag Manager, which imports the Google Analytics library that provides access to the
- * GAI methods. If you are not using GTM, and not sending hits to GA360 (Universal Analytics),
- * you will need to remove code that references GAI.
- *
  * @author Chris Hubbard
- * @copyright Copyright (c) 2021 Adswerve. All rights reserved.
+ * @copyright Copyright (c) 2023 Adswerve. All rights reserved.
  */
 
 #ifndef AAHAnalyticsHelper_h
@@ -49,8 +43,7 @@ static NSString *const _Nonnull kAAHAnalyticsHelperParameterTimestamp NS_SWIFT_N
 static NSString *const _Nonnull kAAHAnalyticsHelperParameterErrorMessage NS_SWIFT_NAME(AnalyticsHelperParameterErrorMessage) = @"error_message";
 
 /** User property name constants (define all custom user property names here). */
-static NSString *const _Nonnull kAAHAnalyticsHelperUserPropertyEnvironment NS_SWIFT_NAME(AnalyticsHelperUserPropertyEnvironment) = @"environment";
-static NSString *const _Nonnull kAAHAnalyticsHelperUserPropertyAppInstanceID NS_SWIFT_NAME(AnalyticsHelperUserPropertyAppInstanceID) = @"app_instance_id";
+static NSString *const _Nonnull kAAHAnalyticsHelperUserPropertyClientId2 NS_SWIFT_NAME(AnalyticsHelperUserPropertyClientId2) = @"client_id_2";
 static NSString *const _Nonnull kAAHAnalyticsHelperUserPropertyTimezoneOffset NS_SWIFT_NAME(AnalyticsHelperUserPropertyTimezoneOffset) = @"timezone_offset";
 
 @class AAHAnalyticsHelper;
@@ -70,11 +63,11 @@ static NSString *const _Nonnull kAAHAnalyticsHelperUserPropertyTimezoneOffset NS
  */
 + (void)configure NS_SWIFT_NAME(configure());
 
-// MARK: - Firebase helpers
+// MARK: - GA4/Firebase helpers
 
 /**
- * Wrapper for Firebase's logEventWithName method, providing an opportunity to validate the event and
- * append additional standard parameters before passing the event to Firebase.
+ * Wrapper for GA4/Firebase's logEventWithName method, providing an opportunity to validate the event and
+ * append additional standard parameters before passing the event to GA4/Firebase.
  *
  * @param name The name of the event.
  * @param parameters Optional dictionary of event parameters.
@@ -83,8 +76,8 @@ static NSString *const _Nonnull kAAHAnalyticsHelperUserPropertyTimezoneOffset NS
 NS_SWIFT_NAME(logEvent(_:parameters:));
 
 /**
- * Wrapper for Firebase's setDefaultEventParameters method, providing an opportunity to
- * validate the parameters before passing them to Firebase.
+ * Wrapper for GA4/Firebase's setDefaultEventParameters method, providing an opportunity to
+ * validate the parameters before passing them to GA4/Firebase.
  *
  * @param parameters Dictionary of event parameters (or nil to clear them).
  */
@@ -92,8 +85,8 @@ NS_SWIFT_NAME(logEvent(_:parameters:));
 NS_SWIFT_NAME(setDefaultEventParameters(_:));
 
 /**
- * Wrapper for Firebase's setUserProperty method, providing an opportunity to
- * validate the user property name and value before passing it to Firebase.
+ * Wrapper for GA4/Firebase's setUserProperty method, providing an opportunity to
+ * validate the user property name and value before passing it to GA4/Firebase.
  *
  * @param value The value of the user property (passing nil clears the user property).
  * @param name The name of the user property to set.
@@ -102,18 +95,18 @@ NS_SWIFT_NAME(setDefaultEventParameters(_:));
 NS_SWIFT_NAME(setUserProperty(_:forName:));
 
 /**
- * Wrapper for Firebase's setUserID method, providing an opportunity to
- * validate the ID value before passing it to Firebase.
+ * Wrapper for GA4/Firebase's setUserID method, providing an opportunity to
+ * validate the ID value before passing it to GA4/Firebase.
  *
  * This feature must be used in accordance with Google's Privacy Policy:
  * https://www.google.com/policies/privacy
  *
- * @param userID Value to set as the Firebase User ID (or nil to clear it).
+ * @param userID Value to set as the GA4 User ID (or nil to clear it).
  */
 + (void)setUserID:(nullable NSString*)userID;
 
 /**
- * Wrapper for Firebase's setAnalyticsCollectionEnabled method. (For convenience.)
+ * Wrapper for GA4/Firebase's setAnalyticsCollectionEnabled method. (For convenience.)
  *
  * Sets whether analytics collection is enabled for this app on this device. This setting is
  * persisted across app sessions. By default it is enabled.
@@ -123,7 +116,7 @@ NS_SWIFT_NAME(setUserProperty(_:forName:));
 + (void)setAnalyticsCollectionEnabled:(BOOL)analyticsCollectionEnabled;
 
 /**
- * Wrapper for Firebase's resetAnalyticsData method. (For convenience.)
+ * Wrapper for GA4/Firebase's resetAnalyticsData method. (For convenience.)
  *
  * Clears all analytics data for this instance from the device and resets the app instance ID.
  * FIRAnalyticsConfiguration values will be reset to the default values.
@@ -151,33 +144,34 @@ NS_SWIFT_NAME(trimUserProp(_:));
 // MARK: - Validation/enforcement of Firebase/GA4 rules
 
 /**
- * Controls whether to perform Firebase validation for debug builds. Default is true.
+ * Controls whether validation is performed in debug builds. Default is true.
  */
 + (void)setValidateInDebug:(BOOL)enable;
 
 /**
- * Controls whether to perform Firebase validation in production. Default is false. If enabled,
- * only sends custom error events to Firebase, no logging or exceptions.
+ * Controls whether validation is performed in release builds. Default is false.
+ * 
+ * If enabled, only sends custom error events to GA4/Firebase, no logging or exceptions.
  */
 + (void)setValidateInProduction:(BOOL)enable;
 
 /**
- * Controls whether custom validation error events are sent to Firebase. Default is false.
+ * Controls whether custom validation error events are sent to GA4/Firebase. Default is false.
  */
 + (void)setSendValidationErrorEvents:(BOOL)enable;
 
 /**
- * Controls whether NSInvalidArgumentException exceptions are thrown for Firebase validation
+ * Controls whether NSInvalidArgumentException exceptions are thrown for GA4/Firebase validation
  * errors in debug builds. Default is false.
  */
 + (void)setThrowOnValidationErrorsInDebug:(BOOL)enable;
 
 /**
  * Controls whether string values in event parameters and user properties are truncated to
- * the maximum lengths allowed before passing to Firebase. Default is false.
+ * the maximum lengths allowed before passing to GA4/Firebase. Default is false.
  *
  * While "validation" is about awareness of issues, this setting is about "enforcement", to
- * prevent Firebase from dropping parameters and user properties that exceed the allowable
+ * prevent GA4/Firebase from dropping parameters and user properties that exceed the allowable
  * lengths. If enabled, it applies regardless of build type or whether validation is enabled.
  *
  * Alternatively, use truncateParam: and truncateUserProp: to trim only those string values
@@ -185,31 +179,18 @@ NS_SWIFT_NAME(trimUserProp(_:));
  */
 + (void)setTruncateStringValues:(BOOL)enable;
 
-// MARK: - Firebase/GA4 DebugView
+// MARK: - DebugView
 
 /**
- * Forces the app to send Firebase events to the DebugView pane in the Firebase console or GA4 property.
+ * Forces the app to send events to the DebugView pane in the GA4 property and Firebase console.
  *
- * Useful for testing builds that are not launched directly from Xcode.
+ * Useful for testing builds that are not launched directly from Xcode. This should NOT be called
+ * by production apps!
  *
  * Call this method from your AppDelegate's `application:didFinishLaunchingWithOptions:` method before
  * calling `[FIRApp configure]`.
  */
 + (void)setFirebaseLaunchArguments;
-
-// MARK: - Google Analytics (UA) dispatch
-
-/**
- * Sends any queued hits to GA360 (Universal Analytics) when app enters the background.
- *
- * FOR USE WITH GOOGLE TAG MANAGER, which imports the Google Analytics
- * library and exposes the GAI methods.
- *
- * Call this method from your AppDelegate's `applicationWillResignActive:` method, or from
- * `sceneWillResignActive:` if using Scenes, before the app actually enters the background.
- * Based on: https://developers.google.com/analytics/devguides/collection/ios/v3/dispatch
- */
-+ (void)sendHitsInBackground;
 
 @end
 

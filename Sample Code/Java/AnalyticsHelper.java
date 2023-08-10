@@ -4,13 +4,11 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.Log;
 
 import YOUR_PACKAGE_HERE.BuildConfig;
-import com.google.android.gms.analytics.GoogleAnalytics;  // loaded by Google Tag Manager
 import com.google.firebase.analytics.FirebaseAnalytics;
 
 import java.text.SimpleDateFormat;
@@ -26,22 +24,21 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 /**
- * Helper class to assist with common analytics implementation needs, including:
+ * Helper class to assist with common GA4 analytics implementation needs, including:
  *
  * - Defining event, parameter, and user property constants to prevent typos
  * - Adding standard parameters to every event
- * - Validating names/values before sending to Firebase
- * - Truncating string values to maximum supported lengths before sending to Firebase
+ * - Validating names/values before sending to GA4/Firebase
+ * - Truncating string values to maximum supported lengths before sending to GA4/Firebase
  * - Logging events when the app goes into the foreground and background
- * - Logging event when app version updates (for Universal Analytics)
  *
  * This class cannot be instantiated. All methods are static class methods. However, it must be
  * configured before its methods are called, ideally in Application#onCreate. Attempting to log
  * events before calling AnalyticsHelper.configure() will result in an IllegalStateException.
  *
- * For convenience, all commonly-used Firebase methods have identically-named methods here.
+ * For convenience, all commonly-used GA4/Firebase methods have identically-named methods here.
  *
- * Firebase validation/enforcement behavior can be controlled via the following methods:
+ * GA4/Firebase validation/enforcement behavior can be controlled via the following methods:
  *
  * - setValidateInDebug (default: true)
  * - setValidateInProduction (default: false)
@@ -52,13 +49,8 @@ import androidx.annotation.Nullable;
  * This code is intended only to illustrate how you might create an analytics helper class.
  * It is not ready for production use as-is.
  *
- * The parts of this sample code that deal with Universal Analytics depend on the presence of
- * Google Tag Manager, which imports the Google Analytics library that provides access to the
- * GoogleAnalytics methods. If you are not using GTM, and not sending hits to GA360 (Universal
- * Analytics), you will need to remove code that references GoogleAnalytics.
- *
  * @author Chris Hubbard
- * @copyright Copyright (c) 2021 Adswerve. All rights reserved.
+ * @copyright Copyright (c) 2023 Adswerve. All rights reserved.
  */
 public class AnalyticsHelper {
 
@@ -71,7 +63,6 @@ public class AnalyticsHelper {
         public static final String SCREEN_VIEW = "screen_view";
         private static final String APP_OPEN = "app_open";
         private static final String APP_CLOSE = "app_close";
-        private static final String APP_UPDATE = "app_update_android";  // for use with Universal Analytics
         private static final String VALIDATION_ERROR = "error_validation";
     }
 
@@ -83,7 +74,6 @@ public class AnalyticsHelper {
         public static final String SCREEN_CLASS = "screen_class";
         private static final String TIMESTAMP = "timestamp";
         private static final String ERROR_MESSAGE = "error_message";
-        private static final String PREVIOUS_APP_VERSION = "previous_app_version";
         private static final String ENGAGEMENT_TIME = "engagement_time";
     }
 
@@ -91,8 +81,7 @@ public class AnalyticsHelper {
      * User property name constants (define all custom user property names here).
      */
     public static class UserProperty {
-        private static final String ENVIRONMENT = "environment";
-        private static final String APP_INSTANCE_ID = "app_instance_id";
+        private static final String CLIENT_ID_2 = "client_id_2";
         private static final String TIMEZONE_OFFSET = "timezone_offset";
     }
 
@@ -130,57 +119,22 @@ public class AnalyticsHelper {
         // refresh user properties that may have changed since last launch
         setUserProperty(UserProperty.TIMEZONE_OFFSET, getTimezoneOffset());
         sFirebaseAnalytics.getAppInstanceId()
-                .addOnSuccessListener(id -> setUserProperty(UserProperty.APP_INSTANCE_ID, id))
+                .addOnSuccessListener(id -> setUserProperty(UserProperty.CLIENT_ID_2, id))
                 .addOnFailureListener(e -> {
                     // if first attempt fails, try again
                     sFirebaseAnalytics.getAppInstanceId()
-                            .addOnSuccessListener(id -> setUserProperty(UserProperty.APP_INSTANCE_ID, id));
+                            .addOnSuccessListener(id -> setUserProperty(UserProperty.CLIENT_ID_2, id));
                 });
 
-        // set an "environment" user property to allow GTM to send hits to the desired GA360 property (optional)
-        // also allows test data to be filtered out in GA4/Firebase/BigQuery
-        // Note: Due to the Firebase SDK's startup sequence, this user property may not be set until
-        // after first_open and the first session_start, and potentially other automatic events that
-        // occur immediately after the first launch. If this timing presents issues, the alternative
-        // in traditional GA (Universal Analytics) is to use a GTM function call variable to supply
-        // "environment" for each tag. (Currently there is no workaround for Firebase/GA4/BigQuery.)
-        if (BuildConfig.DEBUG) {
-            // default implementation determines environment based on build type, but
-            // criteria can be made more sophisticated as needed
-            setUserProperty(UserProperty.ENVIRONMENT, "test");
-        } else {
-            setUserProperty(UserProperty.ENVIRONMENT, "production");
-        }
-
-        // set GA dispatch interval (only applicable if using GTM to send data to Universal Analytics)
-        if (BuildConfig.DEBUG) {
-            GoogleAnalytics.getInstance(context).setLocalDispatchPeriod(1);  // 1 second
-        }
-
-        // custom app update event (because GTM cannot see the auto app_update event on Android)
-        SharedPreferences prefs = context.getSharedPreferences(TAG, Context.MODE_PRIVATE);
-        String lastAppVersionCode = getStringPreference(prefs, Preference.APP_VERSION_CODE);
-        if (null == lastAppVersionCode) {
-            setStringPreference(prefs, Preference.APP_VERSION_CODE, String.valueOf(BuildConfig.VERSION_CODE));
-            setStringPreference(prefs, Preference.APP_VERSION_NAME, BuildConfig.VERSION_NAME);
-        } else if (!lastAppVersionCode.equals(String.valueOf(BuildConfig.VERSION_CODE))) {
-            String lastAppVersionName = getStringPreference(prefs, Preference.APP_VERSION_NAME);
-            Bundle params = new Bundle();
-            params.putString(Param.PREVIOUS_APP_VERSION, lastAppVersionName);
-            logEvent(Event.APP_UPDATE, params);
-            setStringPreference(prefs, Preference.APP_VERSION_CODE, String.valueOf(BuildConfig.VERSION_CODE));
-            setStringPreference(prefs, Preference.APP_VERSION_NAME, BuildConfig.VERSION_NAME);
-        }
     }
 
 
-    /**************** Firebase helper methods ****************/
+    /**************** GA4/Firebase helper methods ****************/
 
 
     /**
-     * Wrapper for Firebase's logEvent method, providing an opportunity to validate the event,
-     * enforce Firebase rules, append additional standard parameters, etc. before passing the
-     * event to Firebase.
+     * Wrapper for GA4/Firebase's logEvent method, providing an opportunity to validate the event and
+     * append additional standard parameters before passing the event to GA4/Firebase.
      *
      * @param name   Name of the event.
      * @param params Bundle of event parameters (optional).
@@ -200,8 +154,8 @@ public class AnalyticsHelper {
     }
 
     /**
-     * Wrapper for Firebase's setDefaultEventParameters method, providing an opportunity to
-     * validate the parameters and enforce Firebase rules before passing them to Firebase.
+     * Wrapper for GA4/Firebase's setDefaultEventParameters method, providing an opportunity to
+     * validate the parameters before passing them to GA4/Firebase.
      *
      * @param params Bundle of default event parameters (or null to clear them).
      */
@@ -211,8 +165,8 @@ public class AnalyticsHelper {
     }
 
     /**
-     * Wrapper for Firebase's setUserProperty method, providing an opportunity to validate the
-     * user property and enforce Firebase rules before passing it to Firebase.
+     * Wrapper for GA4/Firebase's setUserProperty method, providing an opportunity to
+     * validate the user property name and value before passing it to GA4/Firebase.
      *
      * @param name  Name of the user property.
      * @param value Value of the user property (passing null clears the user property).
@@ -223,13 +177,13 @@ public class AnalyticsHelper {
     }
 
     /**
-     * Wrapper for Firebase's setUserId method, providing an opportunity to validate the ID value
-     * before passing it to Firebase.
+     * Wrapper for GA4/Firebase's setUserId method, providing an opportunity to
+     * validate the ID value before passing it to GA4/Firebase.
      *
      * This feature must be used in accordance with Google's Privacy Policy:
      * https://www.google.com/policies/privacy
      *
-     * @param id Value to set as the Firebase User ID.
+     * @param id Value to set as the GA4 User ID.
      */
     public static void setUserId(@Nullable String id) {
         validateUserId(id);
@@ -237,7 +191,7 @@ public class AnalyticsHelper {
     }
 
     /**
-     * Wrapper for Firebase's setAnalyticsCollectionEnabled method. (For convenience.)
+     * Wrapper for GA4/Firebase's setAnalyticsCollectionEnabled method. (For convenience.)
      *
      * Sets whether analytics collection is enabled for this app on this device. This setting
      * is persisted across app sessions. By default it is enabled.
@@ -249,7 +203,7 @@ public class AnalyticsHelper {
     }
 
     /**
-     * Wrapper for Firebase's resetAnalyticsData method. (For convenience.)
+     * Wrapper for GA4/Firebase's resetAnalyticsData method. (For convenience.)
      *
      * Clears all analytics data for this app from the device and resets the app instance id.
      */
@@ -309,11 +263,11 @@ public class AnalyticsHelper {
     }
 
 
-    /**************** Validation/enforcement of Firebase/GA4 rules ****************/
+    /**************** Validation/enforcement of GA4/Firebase rules ****************/
 
 
     /**
-     * Firebase/GA4 validation rules as defined at https://firebase.google.com/docs/reference/android/com/google/firebase/analytics/FirebaseAnalytics.
+     * GA4/Firebase validation rules as defined at https://firebase.google.com/docs/reference/android/com/google/firebase/analytics/FirebaseAnalytics.
      */
     private static class Validation {
         private static final int EVENT_MAX_PARAMETERS = 25;
@@ -331,7 +285,7 @@ public class AnalyticsHelper {
         private static final Pattern VALID_USER_PROPERTY_NAME_REGEX = makeUserPropertyNameRegex();
 
         /**
-         * Compiles regex pattern for Firebase event name validation using constants above.
+         * Compiles regex pattern for GA4/Firebase event name validation using constants above.
          *
          * @return Pattern, or null on failure.
          * @throws PatternSyntaxException if pattern string is invalid. (Test builds only.)
@@ -350,7 +304,7 @@ public class AnalyticsHelper {
         }
 
         /**
-         * Compiles regex pattern for Firebase parameter name validation using constants above.
+         * Compiles regex pattern for GA4/Firebase parameter name validation using constants above.
          *
          * @return Pattern, or null on failure.
          * @throws PatternSyntaxException if pattern string is invalid. (Test builds only.)
@@ -369,7 +323,7 @@ public class AnalyticsHelper {
         }
 
         /**
-         * Compiles regex pattern for Firebase user property name validation using constants above.
+         * Compiles regex pattern for GA4/Firebase user property name validation using constants above.
          *
          * @return Pattern, or null on failure.
          * @throws PatternSyntaxException if pattern string is invalid. (Test builds only.)
@@ -398,7 +352,7 @@ public class AnalyticsHelper {
 
     } // Validation class
 
-    /* Private class variables for validation/enforcement of Firebase rules (see setters below). */
+    /* Private class variables for validation/enforcement of GA4/Firebase rules (see setters below). */
 
     private static boolean sValidateInDebug = true;
     private static boolean sValidateInProduction = false;
@@ -407,30 +361,30 @@ public class AnalyticsHelper {
     private static boolean sTruncateStringValues = true;
 
     /**
-     * Controls whether Firebase validation is performed in debug builds. Default is true.
+     * Controls whether validation is performed in debug builds. Default is true.
      */
     public static void setValidateInDebug(boolean b) {
         sValidateInDebug = b;
     }
 
     /**
-     * Controls whether Firebase validation in performed in release builds. Default is false.
+     * Controls whether validation is performed in release builds. Default is false.
      *
-     * If enabled, only sends custom error events to Firebase, no logging or exceptions.
+     * If enabled, only sends custom error events to GA4/Firebase, no logging or exceptions.
      */
     public static void setValidateInProduction(boolean b) {
         sValidateInProduction = b;
     }
 
     /**
-     * Controls whether custom validation error events are sent to Firebase. Default is false.
+     * Controls whether custom validation error events are sent to GA4/Firebase. Default is false.
      */
     public static void setSendValidationErrorEvents(boolean b) {
         sSendValidationErrorEvents = b;
     }
 
     /**
-     * Controls whether InvalidArgument exceptions are thrown for Firebase validation errors
+     * Controls whether InvalidArgument exceptions are thrown for GA4/Firebase validation errors
      * in debug builds. Default is false.
      */
     public static void setThrowOnValidationErrorsInDebug(boolean b) {
@@ -439,10 +393,10 @@ public class AnalyticsHelper {
 
     /**
      * Controls whether string values in event parameters and user properties are truncated to
-     * the maximum lengths allowed before passing to Firebase. Default is true.
+     * the maximum lengths allowed before passing to GA4/Firebase. Default is true.
      *
      * While "validation" is about awareness of issues, this setting is about "enforcement", to
-     * prevent Firebase from dropping parameters and user properties that exceed the allowable
+     * prevent GA4/Firebase from dropping parameters and user properties that exceed the allowable
      * lengths. If enabled, it applies regardless of build type or whether validation is enabled.
      *
      * Alternatively, use truncateParam() and truncateUserProp() to trim only those string values
@@ -463,7 +417,7 @@ public class AnalyticsHelper {
 
     /**
      * If validation is enabled, checks the event name, parameter count, and parameter names and
-     * values against the Firebase/GA4 rules.
+     * values against the GA4/Firebase rules.
      *
      * See: https://firebase.google.com/docs/reference/android/com/google/firebase/analytics/FirebaseAnalytics.Event
      *
@@ -494,7 +448,7 @@ public class AnalyticsHelper {
 
     /**
      * If validation is enabled, checks each event parameter name and value against the
-     * Firebase/GA4 rules.
+     * GA4/Firebase rules.
      *
      * See: https://firebase.google.com/docs/reference/android/com/google/firebase/analytics/FirebaseAnalytics.Param
      *
@@ -543,7 +497,7 @@ public class AnalyticsHelper {
     }
 
     /**
-     * If validation is enabled, checks the user property name and value against the Firebase/GA4
+     * If validation is enabled, checks the user property name and value against the GA4/Firebase
      * rules.
      *
      * See: https://firebase.google.com/docs/reference/android/com/google/firebase/analytics/FirebaseAnalytics.UserProperty
@@ -571,7 +525,7 @@ public class AnalyticsHelper {
     }
 
     /**
-     * If validation is enabled, checks the user ID against the Firebase/GA4 rules.
+     * If validation is enabled, checks the user ID against the GA4/Firebase rules.
      *
      * See: https://firebase.google.com/docs/reference/android/com/google/firebase/analytics/FirebaseAnalytics
      *
@@ -617,50 +571,6 @@ public class AnalyticsHelper {
         if (sThrowOnValidationErrorsInDebug && BuildConfig.DEBUG) {
             throw new IllegalArgumentException(errorMessage);
         }
-    }
-
-
-    /**************** Private SharedPreferences ****************/
-
-
-    /**
-     * SharedPreferences keys.
-     */
-    private static class Preference {
-        private static final String APP_VERSION_CODE = "app_version_code";
-        private static final String APP_VERSION_NAME = "app_version_name";
-    }
-
-    /**
-     * Retrieves a String value from SharedPreferences.
-     *
-     * @param prefs SharedPreferences reference.
-     * @param key   Name of the preference.
-     * @return The preference value if it exists, or null if not.
-     * @throws IllegalStateException if called before AnalyticsHelper#configure(context).
-     */
-    private static String getStringPreference(SharedPreferences prefs, String key) {
-        if (null == prefs) {
-            throw new IllegalStateException(ERROR_MESSAGE_FAILED_TO_INIT);
-        }
-        return prefs.getString(key, null);
-    }
-
-    /**
-     * Saves the String value to SharedPreferences.
-     *
-     * @param prefs SharedPreferences reference.
-     * @param key   Name of the preference.
-     * @param value String value to be saved.
-     * @throws IllegalStateException if called before AnalyticsHelper#configure(context).
-     */
-    private static void setStringPreference(SharedPreferences prefs, String key, String value) {
-        if (null == prefs) {
-            throw new IllegalStateException(ERROR_MESSAGE_FAILED_TO_INIT);
-        }
-        SharedPreferences.Editor editor = prefs.edit();
-        editor.putString(key, value);
-        editor.apply();
     }
 
 
@@ -712,9 +622,8 @@ public class AnalyticsHelper {
      * This class listens for changes in the Activity lifecycle for the purpose of detecting when
      * the app goes into the foreground/background so it can log the corresponding event.
      *
-     * Note that Firebase has its own automatic app_foreground and app_background events; however,
-     * these are logged by Firebase's background service, downstream of Google Tag Manager and
-     * thus are unavailable to GTM. The are also not visible in Firebase/GA4/BigQuery.
+     * Note that GA4/Firebase has its own automatic app_foreground and app_background events; however, these
+     * cannot be modified and are not visible in GA4/Firebase/BigQuery.
      */
     private static class ForegroundMonitor implements Application.ActivityLifecycleCallbacks {
         private int mActivityReferences = 0;

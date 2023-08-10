@@ -1,17 +1,16 @@
 /**
  * AnalyticsHelper.m
  *
- * Helper class to assist with common analytics implementation needs, including:
+ * Helper class to assist with common GA4 analytics implementation needs, including:
  *
  * - Defining event, parameter, and user property constants to prevent typos
  * - Adding standard parameters to every event, etc.
- * - Validating names/values before sending to Firebase
- * - Truncating string values to maximum supported lengths before sending to Firebase
+ * - Validating names/values before sending to GA4/Firebase
+ * - Truncating string values to maximum supported lengths before sending to GA4/Firebase
  * - Enabling DebugView in builds not launched directly from Xcode
- * - Sending buffered hits when app goes into the background (Universal Analytics)
  *
  * This class does not need to  be instantiated. All methods are static class methods. For convenience,
- * all commonly-used Firebase methods have identically-named methods here.
+ * all commonly-used GA4/Firebase methods have identically-named methods here.
  *
  * Firebase validation/enforcement behavior can be controlled via the following methods:
  *
@@ -24,18 +23,12 @@
  * This code is intended only to illustrate how you might create an analytics helper class.
  * It is not ready for production use as-is.
  *
- * The parts of this sample code that deal with Universal Analytics depend on the presence of
- * Google Tag Manager, which imports the Google Analytics library that provides access to the
- * GAI methods. If you are not using GTM, and not sending hits to GA360 (Universal Analytics),
- * you will need to remove code that references GAI.
- *
  * @author Chris Hubbard
- * @copyright Copyright (c) 2021 Adswerve. All rights reserved.
+ * @copyright Copyright (c) 2023 Adswerve. All rights reserved.
  */
 
 #import "AAHAnalyticsHelper.h"
-#import "GAI.h"  // loaded by Google Tag Manager
-@import Firebase;
+@import FirebaseAnalytics;
 
 @implementation AAHAnalyticsHelper
 
@@ -75,7 +68,7 @@ static BOOL _isConfigured = NO;
  * Configures this helper class and provides an opportunity to set initial state and refresh any user properties
  * that may have changed since the previous launch.
  *
- * This method will be called automatically if needed when using the Firebase helper methods below; however,
+ * This method will be called automatically if needed when using the GA4/Firebase helper methods below; however,
  * to set initial state as early as possible in the app's startup process, calling this manually immediately after
  * calling `[FIRApp configure]` is recommended.
  */
@@ -83,34 +76,16 @@ static BOOL _isConfigured = NO;
 
     // refresh user properties that may have changed since last launch
     [FIRAnalytics setUserPropertyString:[self getTimezoneOffset] forName:kAAHAnalyticsHelperUserPropertyTimezoneOffset];     // example
-    [FIRAnalytics setUserPropertyString:[FIRAnalytics appInstanceID] forName:kAAHAnalyticsHelperUserPropertyAppInstanceID];  // example
-    
-    // set an "environment" user property to allow GTM to send hits to the desired GA360 property (optional)
-    // also allows test data to be filtered out in GA4/Firebase/BigQuery
-    // Note: Due to the Firebase SDK's startup sequence, this user property may not be set until
-    // after first_open and the first session_start, and potentially other automatic events that
-    // occur immediately after the first launch. If this timing presents issues, the alternative
-    // in traditional GA (Universal Analytics) is to use a GTM function call variable to supply
-    // "environment" for each tag. (Currently there is no workaround for Firebase/GA4/BigQuery.)
-    if([self isDebugBuild]) {
-        // default implementation determines environment based on build type, but
-        // the criteria can be made more sophisticated as needed
-        [FIRAnalytics setUserPropertyString:@"test" forName:kAAHAnalyticsHelperUserPropertyEnvironment];
-    } else {
-        [FIRAnalytics setUserPropertyString:@"production" forName:kAAHAnalyticsHelperUserPropertyEnvironment];
-    }
-    
-    // set GA dispatch interval (only applicable if using GTM to send data to Universal Analytics)
-    [self setDispatchInterval];
+    [FIRAnalytics setUserPropertyString:[FIRAnalytics appInstanceID] forName:kAAHAnalyticsHelperUserPropertyClientId2];  // example
     
     _isConfigured = YES;
 }
 
-// MARK: - Firebase helpers
+// MARK: - GA4/Firebase helpers
 
 /**
- * Wrapper for Firebase's logEventWithName method, providing an opportunity to validate the event, enforce Firebase rules,
- * append additional standard parameters, etc. before passing the event to Firebase.
+ * Wrapper for GA4/Firebase's logEventWithName method, providing an opportunity to validate the event and
+ * append additional standard parameters before passing the event to GA4/Firebase.
  *
  * @param name The name of the event.
  * @param parameters Dictionary of event parameters (optional).
@@ -136,8 +111,8 @@ NS_SWIFT_NAME(logEvent(_:parameters:)) {
 }
 
 /**
- * Wrapper for Firebase's setDefaultEventParameters method, providing an opportunity to validate the parameters
- * and enforce Firebase rules before passing them to Firebase.
+ * Wrapper for GA4/Firebase's setDefaultEventParameters method, providing an opportunity to
+ * validate the parameters before passing them to GA4/Firebase.
  *
  * @param parameters Dictionary of event parameters (or nil to clear them).
  */
@@ -152,8 +127,8 @@ NS_SWIFT_NAME(logEvent(_:parameters:)) {
 }
 
 /**
- * Wrapper for Firebase's setUserPropertyString method, providing an opportunity to validate the user property
- * and enforce Firebase rules before passing it to Firebase.
+ * Wrapper for GA4/Firebase's setUserProperty method, providing an opportunity to
+ * validate the user property name and value before passing it to GA4/Firebase.
  *
  * @param value The value of the user property (passing nil clears the user property).
  * @param name The name of the user property to set.
@@ -170,12 +145,13 @@ NS_SWIFT_NAME(setUserProperty(_:forName:)) {
 }
 
 /**
- * Wrapper for Firebase's setUserID method, providing an opportunity to validate the ID value before passing it to Firebase.
+ * Wrapper for GA4/Firebase's setUserID method, providing an opportunity to
+ * validate the ID value before passing it to GA4/Firebase.
  *
  * This feature must be used in accordance with Google's Privacy Policy:
  * https://www.google.com/policies/privacy
  *
- * @param userID Value to set as the Firebase User ID (or nil to clear it).
+ * @param userID Value to set as the GA4 User ID (or nil to clear it).
  */
 + (void)setUserID:(nullable NSString*)userID {
     if([self isConfigured]) {
@@ -188,7 +164,7 @@ NS_SWIFT_NAME(setUserProperty(_:forName:)) {
 }
 
 /**
- * Wrapper for Firebase's setAnalyticsCollectionEnabled method. (For convenience.)
+ * Wrapper for GA4/Firebase's setAnalyticsCollectionEnabled method. (For convenience.)
  *
  * Sets whether analytics collection is enabled for this app on this device. This setting is
  * persisted across app sessions. By default it is enabled.
@@ -200,7 +176,7 @@ NS_SWIFT_NAME(setUserProperty(_:forName:)) {
 }
 
 /**
- * Wrapper for Firebase's resetAnalyticsData method. (For convenience.)
+ * Wrapper for GA4/Firebase's resetAnalyticsData method. (For convenience.)
  *
  * Clears all analytics data for this instance from the device and resets the app instance ID.
  * FIRAnalyticsConfiguration values will be reset to the default values.
@@ -265,7 +241,7 @@ NS_SWIFT_NAME(setUserProperty(_:forName:)) {
 
 // MARK: - Validation/enforcement of Firebase/GA4 rules
 
-/** Firebase rules as defined at https://firebase.google.com/docs/reference/ios/firebaseanalytics/api/reference/Classes/FIRAnalytics */
+/** GA4/Firebase rules as defined at https://firebase.google.com/docs/reference/ios/firebaseanalytics/api/reference/Classes/FIRAnalytics */
 static const int kValidationEventMaxParameters = 25;
 static const int kValidationEventNameMaxLength = 40;
 static const int kValidationParameterNameMaxLength = 40;
@@ -283,7 +259,7 @@ static NSRegularExpression *_validParameterNameRegex = nil;
 static NSRegularExpression *_validUserPropertyNameRegex = nil;
 
 /**
- * Compiles regex pattern for Firebase event name validation using constants above.
+ * Compiles regex pattern for GA4/Firebase event name validation using constants above.
  *
  * @throws NSInvalidArgumentException if pattern string is invalid. (Test builds only.)
  */
@@ -297,7 +273,7 @@ static NSRegularExpression *_validUserPropertyNameRegex = nil;
 }
 
 /**
- * Compiles regex pattern for Firebase parameter name validation using constants above.
+ * Compiles regex pattern for GA4/Firebase parameter name validation using constants above.
  *
  * @throws NSInvalidArgumentException if pattern string is invalid. (Test builds only.)
  */
@@ -311,7 +287,7 @@ static NSRegularExpression *_validUserPropertyNameRegex = nil;
 }
 
 /**
- * Compiles regex pattern for Firebase user property name validation using constants above.
+ * Compiles regex pattern for GA4/Firebase user property name validation using constants above.
  *
  * @throws NSInvalidArgumentException if pattern string is invalid. (Test builds only.)
  */
@@ -333,7 +309,7 @@ static NSRegularExpression *_validUserPropertyNameRegex = nil;
     return nil != _validEventNameRegex && nil != _validParameterNameRegex && nil != _validUserPropertyNameRegex;
 }
 
-/** Private class variables for validation/enforcement of Firebase rules (see setters below). */
+/** Private class variables for validation/enforcement of GA4/Firebase rules (see setters below). */
 static BOOL _validateInDebug = YES;
 static BOOL _validateInProduction = NO;
 static BOOL _throwOnValidationErrorsInDebug = NO;
@@ -341,24 +317,24 @@ static BOOL _sendValidationErrorEvents = NO;
 static BOOL _truncateStringValues = YES;
 
 /**
- * Controls whether Firebase validation is performed in debug builds. Default is true.
+ * Controls whether validation is performed in debug builds. Default is true.
  */
 + (void)setValidateInDebug:(BOOL)enable { _validateInDebug = enable; }
 
 /**
- * Controls whether Firebase validation in performed in release builds. Default is false.
- *
- * If enabled, only sends custom error events to Firebase, no logging or exceptions.
+ * Controls whether validation is performed in release builds. Default is false.
+ * 
+ * If enabled, only sends custom error events to GA4/Firebase, no logging or exceptions.
  */
 + (void)setValidateInProduction:(BOOL)enable { _validateInProduction = enable; }
 
 /**
- * Controls whether custom validation error events are sent to Firebase. Default is false.
+ * Controls whether custom validation error events are sent to GA4/Firebase. Default is false.
  */
 + (void)setSendValidationErrorEvents:(BOOL)enable { _sendValidationErrorEvents = enable; }
 
 /**
- * Controls whether InvalidArgument exceptions are thrown for Firebase validation errors
+ * Controls whether InvalidArgument exceptions are thrown for validation errors
  * in debug builds. Default is false.
  */
 + (void)setThrowOnValidationErrorsInDebug:(BOOL)enable { _throwOnValidationErrorsInDebug = enable; }
@@ -368,7 +344,7 @@ static BOOL _truncateStringValues = YES;
  * the maximum lengths allowed before passing to Firebase. Default is true.
  *
  * While "validation" is about awareness of issues, this setting is about "enforcement", to
- * prevent Firebase from dropping parameters and user properties that exceed the allowable
+ * prevent GA4/Firebase from dropping parameters and user properties that exceed the allowable
  * lengths. If enabled, it applies regardless of build type or whether validation is enabled.
  *
  * Alternatively, use truncateParam: and truncateUserProp: to trim only those string values
@@ -386,7 +362,7 @@ static BOOL _truncateStringValues = YES;
 }
 
 /**
- * If validation is enabled, checks the event name, parameter count, and parameter names and values against the Firebase/GA4 rules.
+ * If validation is enabled, checks the event name, parameter count, and parameter names and values against the GA4/Firebase rules.
  *
  * See: https://firebase.google.com/docs/reference/ios/firebaseanalytics/api/reference/Classes/FIRAnalytics#logeventwithnameparameters
  *
@@ -416,7 +392,7 @@ static BOOL _truncateStringValues = YES;
 }
 
 /**
- * If validation is enabled, checks each event parameter name and value against the Firebase/GA4 rules.
+ * If validation is enabled, checks each event parameter name and value against the GA4/Firebase rules.
  *
  * See: https://firebase.google.com/docs/reference/ios/firebaseanalytics/api/reference/Classes/FIRAnalytics#logeventwithnameparameters
  *
@@ -454,7 +430,7 @@ static BOOL _truncateStringValues = YES;
 }
 
 /**
- * If validation is enabled, checks the user property name and value against the Firebase/GA4 rules.
+ * If validation is enabled, checks the user property name and value against the GA4/Firebase rules.
  *
  * See: https://firebase.google.com/docs/reference/ios/firebaseanalytics/api/reference/Classes/FIRAnalytics#setuserpropertystringforname
  *
@@ -479,7 +455,7 @@ static BOOL _truncateStringValues = YES;
 }
 
 /**
- * If validation is enabled, checks the user ID against the Firebase/GA4 rules.
+ * If validation is enabled, checks the user ID against the GA4/Firebase rules.
  *
  * See: https://firebase.google.com/docs/reference/ios/firebaseanalytics/api/reference/Classes/FIRAnalytics#setuserid
  *
@@ -525,10 +501,10 @@ static BOOL _truncateStringValues = YES;
     
 }
 
-// MARK: - Firebase/GA4 DebugView
+// MARK: - DebugView
 
 /**
- * Indicates whether events should be sent to DebugView in the Firebase console and GA4 property.
+ * Indicates whether events should be sent to DebugView.
  *
  * Default implementation is based on DEBUG flag, but you can customize this to enable DebugView for
  * select "release" builds that are used for testing. Do NOT enable for true production builds!
@@ -545,9 +521,10 @@ static BOOL _truncateStringValues = YES;
 }
 
 /**
- * Forces the app to send Firebase events to the DebugView pane in the Firebase console or GA4 property.
+ * Forces the app to send events to the DebugView pane in the GA4 property and Firebase console.
  *
- * Useful for testing builds that are not launched directly from Xcode.
+ * Useful for testing builds that are not launched directly from Xcode. This should NOT be called
+ * by production apps!
  *
  * Call this method from your AppDelegate's `application:didFinishLaunchingWithOptions:` method before
  * calling `[FIRApp configure]`.
@@ -560,73 +537,6 @@ static BOOL _truncateStringValues = YES;
         [newArguments addObject:@"-FIRAnalyticsVerboseLoggingEnabled"];
         [[NSProcessInfo processInfo] setValue:[newArguments copy] forKey:@"arguments"];
     }
-}
-
-// MARK: - Google Analytics (UA) dispatch
-
-/**
- * Dispatch interval for traditional GA360 hits in production builds.
- *
- * FOR USE WITH GOOGLE TAG MANAGER, which imports the Google Analytics
- * library and exposes the GAI methods.
- *
- * By default hits are dispatched every 2 minutes when app is in the foreground.
- * Do not reduce or you risk excessive network activity and battery drain.
- */
-static double const kGaProductionDispatchInterval = 120;  // seconds
-
-/** Dispatch handler class variable for sending GA hits in the background. */
-static void (^_dispatchHandler)(GAIDispatchResult result);
-
-/**
- * Sets the dispatch interval for GA360 (Universal Analytics) hits sent by Google Tag Manager.
- *
- * FOR USE WITH GOOGLE TAG MANAGER, which imports the Google Analytics
- * library and exposes the GAI methods.
- *
- * The default GA dispatch interval for production apps is every 2 minutes (120 seconds), but
- * for debug builds it is helpful to set the interval to 1 second so hits go out immediately.
- */
-+ (void)setDispatchInterval {
-    if([self isDebugBuild]) {
-        [GAI sharedInstance].dispatchInterval = 1;
-        [GAI sharedInstance].logger.logLevel = kGAILogLevelVerbose;
-    } else {
-        [GAI sharedInstance].dispatchInterval = kGaProductionDispatchInterval;
-    }
-}
-
-/**
- * Sends any queued hits to GA360 (Universal Analytics) when app enters the background.
- *
- * FOR USE WITH GOOGLE TAG MANAGER, which imports the Google Analytics
- * library and exposes the GAI methods.
- *
- * Call this method from your AppDelegate's `applicationWillResignActive:` method, or from
- * `sceneWillResignActive:` if using Scenes, before the app actually enters the background.
- * Based on: https://developers.google.com/analytics/devguides/collection/ios/v3/dispatch
- */
-+ (void)sendHitsInBackground {
-    __block BOOL taskExpired = NO;
-    __block UIBackgroundTaskIdentifier taskId =
-    [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
-        taskExpired = YES;
-    }];
-    if (taskId == UIBackgroundTaskInvalid) {
-        return;
-    }
-    _dispatchHandler = ^(GAIDispatchResult result) {
-        // Send hits until no hits are left, a dispatch error occurs, or
-        // the background task expires
-        if (result == kGAIDispatchGood && !taskExpired) {
-            [[GAI sharedInstance] dispatchWithCompletionHandler:_dispatchHandler];
-        } else {
-            // restore dispatch interval and end task
-            [self setDispatchInterval];
-            [[UIApplication sharedApplication] endBackgroundTask:taskId];
-        }
-    };
-    [[GAI sharedInstance] dispatchWithCompletionHandler:_dispatchHandler];
 }
 
 // MARK: - Private convenience methods
